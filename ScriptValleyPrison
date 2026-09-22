@@ -1,0 +1,934 @@
+-- ============================================
+-- Fluent UI
+-- ============================================
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+-- ============================================
+-- Serviços
+-- ============================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- ============================================
+-- Config
+-- ============================================
+local Config = {
+    AimbotEnabled = false,
+    AimPart = "Head",
+    Smoothness = 5,
+    WallCheck = false,
+    TeamCheck = false,
+    FOVRadius = 100,
+    ShowFOV = false,
+    AimKey = "MouseButton2",
+    FOVMode = "Mouse",
+    HitboxEnabled = false,
+    HitboxSize = 10,
+    HitboxTransparency = 0.5,
+    HitboxColor = Color3.fromRGB(255, 0, 0),
+    SilentAimEnabled = false,
+    SilentAimChance = 100,
+    SilentAimPart = "Head",
+    ESPEnabled = false,
+    ESPName = false,
+    ESPDistance = false,
+    ESPHealth = false,
+    ESPTeam = false,
+    ESPLocalPlayer = false,
+    ESPDroppedTools = false,
+    ESPBones = false,
+    SnapLines = false,
+    WalkSpeed = 16,
+    JumpPower = 50,
+    InfiniteJump = false,
+    NoClip = false,
+    SpinBot = false,
+    SpinSpeed = 10,
+    Fly = false,
+    FlySpeed = 50,
+    FogRemoved = false,
+    CamFOV = 70,
+}
+
+-- ============================================
+-- Window
+-- ============================================
+local Window = Fluent:CreateWindow({
+    Title = "Valley Prison | Jheanzitos",
+    SubTitle = "por Fluent UI",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 480),
+    Acrylic = true,
+    Theme = "Darker",
+    MinimizeKey = Enum.KeyCode.End
+})
+
+local Tabs = {
+    Combat   = Window:AddTab({ Title = "Combat",     Icon = "sword" }),
+    Visuals  = Window:AddTab({ Title = "Visuals",    Icon = "eye" }),
+    Exploits = Window:AddTab({ Title = "Exploits",   Icon = "zap" }),
+    World    = Window:AddTab({ Title = "World",      Icon = "sliders" }),
+    Settings = Window:AddTab({ Title = "Configurações", Icon = "settings" }),
+}
+
+-- ============================================
+-- Drawing: FOV Circle
+-- ============================================
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = false
+FOVCircle.Filled = false
+FOVCircle.Thickness = 1
+FOVCircle.Color = Color3.fromRGB(76, 194, 255)
+FOVCircle.Transparency = 0.7
+FOVCircle.Radius = Config.FOVRadius
+
+-- ============================================
+-- Caches de Drawing
+-- ============================================
+local ESPCache = {}
+local SnapLineCache = {}
+local DroppedToolCache = {}
+
+-- ============================================
+-- ABA COMBAT — Aimbot
+-- ============================================
+local AimbotToggle = Tabs.Combat:AddToggle("AimbotToggle", { Title = "Ativar Aimbot", Default = false })
+AimbotToggle:OnChanged(function(v) Config.AimbotEnabled = v end)
+
+local ToggleKeybind = Tabs.Combat:AddKeybind("ToggleKeybind", {
+    Title = "Tecla Toggle", Mode = "Toggle", Default = "L"
+})
+ToggleKeybind:OnChanged(function()
+    Config.AimbotEnabled = ToggleKeybind.Value
+    AimbotToggle:SetValue(Config.AimbotEnabled)
+end)
+
+local HoldKeybind = Tabs.Combat:AddKeybind("HoldKeybind", {
+    Title = "Tecla Hold", Mode = "Hold", Default = "MouseButton2"
+})
+HoldKeybind:OnChanged(function() Config.AimKey = HoldKeybind.Value end)
+
+local AimPartDropdown = Tabs.Combat:AddDropdown("AimPartDropdown", {
+    Title = "Hitbox", Values = { "Head", "HumanoidRootPart", "UpperTorso" },
+    Default = "Head", Multi = false
+})
+AimPartDropdown:OnChanged(function(v) Config.AimPart = v end)
+
+local SmoothnessSlider = Tabs.Combat:AddSlider("SmoothnessSlider", {
+    Title = "Suavidade", Default = 5, Min = 1, Max = 20, Rounding = 1
+})
+SmoothnessSlider:OnChanged(function(v) Config.Smoothness = v end)
+
+local WallCheckToggle = Tabs.Combat:AddToggle("WallCheckToggle", {
+    Title = "Visibility Check", Description = "Só mira se o alvo estiver visível.", Default = false
+})
+WallCheckToggle:OnChanged(function(v) Config.WallCheck = v end)
+
+local TeamCheckToggle = Tabs.Combat:AddToggle("TeamCheckToggle", {
+    Title = "Team Check", Default = false
+})
+TeamCheckToggle:OnChanged(function(v) Config.TeamCheck = v end)
+
+local FOVModeDropdown = Tabs.Combat:AddDropdown("FOVModeDropdown", {
+    Title = "FOV Mode", Values = { "Mouse", "Screen" }, Default = "Mouse", Multi = false
+})
+FOVModeDropdown:OnChanged(function(v) Config.FOVMode = v end)
+
+local ShowFOVToggle = Tabs.Combat:AddToggle("ShowFOVToggle", {
+    Title = "Mostrar FOV", Default = false
+})
+ShowFOVToggle:OnChanged(function(v)
+    Config.ShowFOV = v
+    FOVCircle.Visible = v
+end)
+
+local FOVSlider = Tabs.Combat:AddSlider("FOVSlider", {
+    Title = "Tamanho FOV", Default = 100, Min = 20, Max = 400, Rounding = 0
+})
+FOVSlider:OnChanged(function(v)
+    Config.FOVRadius = v
+    FOVCircle.Radius = v
+end)
+
+local FOVColorPicker = Tabs.Combat:AddColorpicker("FOVColorPicker", {
+    Title = "Cor do FOV", Default = Color3.fromRGB(76, 194, 255)
+})
+FOVColorPicker:OnChanged(function() FOVCircle.Color = FOVColorPicker.Value end)
+
+-- Hitbox
+Tabs.Combat:AddParagraph({ Title = "Hitbox Expander", Content = "Expande a hitbox." })
+
+local HitboxToggle = Tabs.Combat:AddToggle("HitboxToggle", { Title = "Ativar Hitbox", Default = false })
+HitboxToggle:OnChanged(function(v) Config.HitboxEnabled = v end)
+
+local HitboxSizeSlider = Tabs.Combat:AddSlider("HitboxSizeSlider", {
+    Title = "Tamanho", Default = 10, Min = 2, Max = 50, Rounding = 1
+})
+HitboxSizeSlider:OnChanged(function(v) Config.HitboxSize = v end)
+
+local HitboxTransparencySlider = Tabs.Combat:AddSlider("HitboxTransparencySlider", {
+    Title = "Transparência", Default = 0.5, Min = 0, Max = 1, Rounding = 2
+})
+HitboxTransparencySlider:OnChanged(function(v) Config.HitboxTransparency = v end)
+
+local HitboxColorPicker = Tabs.Combat:AddColorpicker("HitboxColorPicker", {
+    Title = "Cor da Hitbox", Default = Color3.fromRGB(255, 0, 0)
+})
+HitboxColorPicker:OnChanged(function() Config.HitboxColor = HitboxColorPicker.Value end)
+
+-- Silent Aim
+Tabs.Combat:AddParagraph({ Title = "Silent Aim", Content = "Mira silenciosa." })
+
+local SilentAimToggle = Tabs.Combat:AddToggle("SilentAimToggle", {
+    Title = "Ativar Silent Aim", Default = false
+})
+SilentAimToggle:OnChanged(function(v) Config.SilentAimEnabled = v end)
+
+local SilentAimChanceSlider = Tabs.Combat:AddSlider("SilentAimChanceSlider", {
+    Title = "Chance (%)", Default = 100, Min = 0, Max = 100, Rounding = 0
+})
+SilentAimChanceSlider:OnChanged(function(v) Config.SilentAimChance = v end)
+
+local SilentAimPartDropdown = Tabs.Combat:AddDropdown("SilentAimPartDropdown", {
+    Title = "Parte do Silent Aim",
+    Values = { "Head", "HumanoidRootPart", "UpperTorso" },
+    Default = "Head", Multi = false
+})
+SilentAimPartDropdown:OnChanged(function(v) Config.SilentAimPart = v end)
+
+-- ============================================
+-- ABA VISUALS — ESP
+-- ============================================
+Tabs.Visuals:AddParagraph({ Title = "ESP", Content = "Visualização de jogadores." })
+
+local ESPToggle = Tabs.Visuals:AddToggle("ESPToggle", { Title = "Ativar ESP", Default = false })
+ESPToggle:OnChanged(function(v) Config.ESPEnabled = v end)
+
+local ESPNameToggle = Tabs.Visuals:AddToggle("ESPNameToggle", { Title = "ESP Name", Default = false })
+ESPNameToggle:OnChanged(function(v) Config.ESPName = v end)
+
+local ESPDistanceToggle = Tabs.Visuals:AddToggle("ESPDistanceToggle", { Title = "ESP Distance", Default = false })
+ESPDistanceToggle:OnChanged(function(v) Config.ESPDistance = v end)
+
+local ESPHealthToggle = Tabs.Visuals:AddToggle("ESPHealthToggle", { Title = "ESP Vida", Default = false })
+ESPHealthToggle:OnChanged(function(v) Config.ESPHealth = v end)
+
+local ESPTeamToggle = Tabs.Visuals:AddToggle("ESPTeamToggle", { Title = "ESP Times", Default = false })
+ESPTeamToggle:OnChanged(function(v) Config.ESPTeam = v end)
+
+local ESPLocalPlayerToggle = Tabs.Visuals:AddToggle("ESPLocalPlayerToggle", {
+    Title = "ESP LocalPlayer", Default = false
+})
+ESPLocalPlayerToggle:OnChanged(function(v) Config.ESPLocalPlayer = v end)
+
+local ESPBonesToggle = Tabs.Visuals:AddToggle("ESPBonesToggle", {
+    Title = "ESP Bones", Description = "Esqueleto do jogador.", Default = false
+})
+ESPBonesToggle:OnChanged(function(v) Config.ESPBones = v end)
+
+local ESPDroppedToolsToggle = Tabs.Visuals:AddToggle("ESPDroppedToolsToggle", {
+    Title = "ESP Dropped Tools", Default = false
+})
+ESPDroppedToolsToggle:OnChanged(function(v) Config.ESPDroppedTools = v end)
+
+local SnapLinesToggle = Tabs.Visuals:AddToggle("SnapLinesToggle", {
+    Title = "SnapLines", Default = false
+})
+SnapLinesToggle:OnChanged(function(v) Config.SnapLines = v end)
+
+-- ============================================
+-- ABA EXPLOITS
+-- ============================================
+Tabs.Exploits:AddParagraph({ Title = "Movement", Content = "Velocidade e pulo." })
+
+local WalkSpeedSlider = Tabs.Exploits:AddSlider("WalkSpeedSlider", {
+    Title = "WalkSpeed", Default = 16, Min = 1, Max = 500, Rounding = 0
+})
+WalkSpeedSlider:OnChanged(function(v)
+    Config.WalkSpeed = v
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.WalkSpeed = v end
+end)
+
+local JumpSlider = Tabs.Exploits:AddSlider("JumpSlider", {
+    Title = "JumpHeight", Default = 50, Min = 1, Max = 500, Rounding = 0
+})
+JumpSlider:OnChanged(function(v)
+    Config.JumpPower = v
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.UseJumpPower = true; hum.JumpPower = v end
+end)
+
+local InfJumpToggle = Tabs.Exploits:AddToggle("InfJumpToggle", {
+    Title = "Infinite Jump", Default = false
+})
+InfJumpToggle:OnChanged(function(v) Config.InfiniteJump = v end)
+
+local NoClipToggle = Tabs.Exploits:AddToggle("NoClipToggle", {
+    Title = "NoClip", Default = false
+})
+NoClipToggle:OnChanged(function(v) Config.NoClip = v end)
+
+Tabs.Exploits:AddParagraph({ Title = "SpinBot", Content = "Gira o personagem." })
+
+local SpinBotToggle = Tabs.Exploits:AddToggle("SpinBotToggle", {
+    Title = "SpinBot", Default = false
+})
+SpinBotToggle:OnChanged(function(v) Config.SpinBot = v end)
+
+local SpinSpeedSlider = Tabs.Exploits:AddSlider("SpinSpeedSlider", {
+    Title = "Velocidade do Spin", Default = 10, Min = 1, Max = 100, Rounding = 0
+})
+SpinSpeedSlider:OnChanged(function(v) Config.SpinSpeed = v end)
+
+Tabs.Exploits:AddParagraph({ Title = "Fly", Content = "Voa livremente (personagem solto)." })
+
+local FlyToggle = Tabs.Exploits:AddToggle("FlyToggle", {
+    Title = "Fly (livre)", Default = false
+})
+FlyToggle:OnChanged(function(v)
+    Config.Fly = v
+    if not v then
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.Velocity = Vector3.zero
+            hrp.RotVelocity = Vector3.zero
+        end
+    end
+end)
+
+local FlySpeedSlider = Tabs.Exploits:AddSlider("FlySpeedSlider", {
+    Title = "Velocidade do Fly", Default = 50, Min = 10, Max = 300, Rounding = 0
+})
+FlySpeedSlider:OnChanged(function(v) Config.FlySpeed = v end)
+
+-- ============================================
+-- ABA WORLD — Atmosphere / Fog / FOV Cam
+-- ============================================
+Tabs.World:AddParagraph({ Title = "Atmosphere", Content = "Controla a atmosfera do mapa." })
+
+local function GetAtmosphere()
+    local atm = Lighting:FindFirstChildOfClass("Atmosphere")
+    if not atm then
+        atm = Instance.new("Atmosphere")
+        atm.Parent = Lighting
+    end
+    return atm
+end
+
+local AtmDensitySlider = Tabs.World:AddSlider("AtmDensitySlider", {
+    Title = "Density", Default = 0.3, Min = 0, Max = 1, Rounding = 2
+})
+AtmDensitySlider:OnChanged(function(v) GetAtmosphere().Density = v end)
+
+local AtmOffsetSlider = Tabs.World:AddSlider("AtmOffsetSlider", {
+    Title = "Offset", Default = 0, Min = -1, Max = 1, Rounding = 2
+})
+AtmOffsetSlider:OnChanged(function(v) GetAtmosphere().Offset = v end)
+
+local AtmHazeSlider = Tabs.World:AddSlider("AtmHazeSlider", {
+    Title = "Haze", Default = 0, Min = 0, Max = 10, Rounding = 2
+})
+AtmHazeSlider:OnChanged(function(v) GetAtmosphere().Haze = v end)
+
+local AtmGlareSlider = Tabs.World:AddSlider("AtmGlareSlider", {
+    Title = "Glare", Default = 0, Min = 0, Max = 10, Rounding = 2
+})
+AtmGlareSlider:OnChanged(function(v) GetAtmosphere().Glare = v end)
+
+local AtmColorPicker = Tabs.World:AddColorpicker("AtmColorPicker", {
+    Title = "Atmosphere Color", Default = Color3.fromRGB(199, 199, 199)
+})
+AtmColorPicker:OnChanged(function() GetAtmosphere().Color = AtmColorPicker.Value end)
+
+local AtmDecayPicker = Tabs.World:AddColorpicker("AtmDecayPicker", {
+    Title = "Decay Color", Default = Color3.fromRGB(106, 112, 125)
+})
+AtmDecayPicker:OnChanged(function() GetAtmosphere().Decay = AtmDecayPicker.Value end)
+
+-- Fog
+Tabs.World:AddParagraph({ Title = "Fog", Content = "Controla a névoa." })
+
+local FogEndSlider = Tabs.World:AddSlider("FogEndSlider", {
+    Title = "Fog End", Default = 100000, Min = 0, Max = 100000, Rounding = 0
+})
+FogEndSlider:OnChanged(function(v)
+    if not Config.FogRemoved then Lighting.FogEnd = v end
+end)
+
+local FogStartSlider = Tabs.World:AddSlider("FogStartSlider", {
+    Title = "Fog Start", Default = 0, Min = 0, Max = 100000, Rounding = 0
+})
+FogStartSlider:OnChanged(function(v)
+    if not Config.FogRemoved then Lighting.FogStart = v end
+end)
+
+local FogColorPicker = Tabs.World:AddColorpicker("FogColorPicker", {
+    Title = "Fog Color", Default = Color3.fromRGB(192, 192, 192)
+})
+FogColorPicker:OnChanged(function() Lighting.FogColor = FogColorPicker.Value end)
+
+local RemoveFogToggle = Tabs.World:AddToggle("RemoveFogToggle", {
+    Title = "Remover Fog", Default = false
+})
+RemoveFogToggle:OnChanged(function(v)
+    Config.FogRemoved = v
+    if v then
+        Lighting.FogEnd = 9e9
+        Lighting.FogStart = 9e9
+    else
+        Lighting.FogEnd = 100000
+        Lighting.FogStart = 0
+    end
+end)
+
+-- FOV Cam
+Tabs.World:AddParagraph({ Title = "Camera", Content = "FOV da câmera." })
+
+local CamFOVSlider = Tabs.World:AddSlider("CamFOVSlider", {
+    Title = "Camera FOV", Default = 70, Min = 30, Max = 160, Rounding = 0
+})
+CamFOVSlider:OnChanged(function(v)
+    Config.CamFOV = v
+    Camera.FieldOfView = v
+end)
+
+-- ============================================
+-- ABA CONFIGURAÇÕES (do menu)
+-- ============================================
+Tabs.Settings:AddParagraph({
+    Title = "Interface",
+    Content = "Personalize a aparência e o comportamento do menu."
+})
+
+local ThemeDropdown = Tabs.Settings:AddDropdown("ThemeDropdown", {
+    Title = "Tema da UI",
+    Description = "Troca o tema em tempo real.",
+    Values = { "Darker", "Dark", "Light", "Rose", "Aqua", "Amethyst", "Emerald" },
+    Default = "Darker",
+    Multi = false
+})
+ThemeDropdown:OnChanged(function(Value)
+    Fluent:SetTheme(Value)
+    Fluent:Notify({
+        Title = "Tema Alterado",
+        Content = "Novo tema: " .. Value,
+        Duration = 3
+    })
+end)
+
+local MenuKeybind = Tabs.Settings:AddKeybind("MenuKeybind", {
+    Title = "Tecla para Abrir/Fechar Menu",
+    Description = "Padrão: End",
+    Mode = "Toggle",
+    Default = "End"
+})
+MenuKeybind:OnChanged(function()
+    local key = Enum.KeyCode[MenuKeybind.Value]
+    if key then
+        Fluent.MinimizeKey = key
+    end
+end)
+
+Tabs.Settings:AddButton({
+    Title = "Destruir Interface",
+    Description = "Fecha e remove o menu completamente.",
+    Callback = function()
+        Fluent:Destroy()
+    end
+})
+
+-- ============================================
+-- Funções auxiliares
+-- ============================================
+local function GetFOVCenter()
+    if Config.FOVMode == "Mouse" then
+        return UserInputService:GetMouseLocation()
+    end
+    local v = Camera.ViewportSize
+    return Vector2.new(v.X / 2, v.Y / 2)
+end
+
+local function IsVisible(targetPart)
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = { LocalPlayer.Character, Camera }
+    rayParams.IgnoreWater = true
+    local origin = Camera.CFrame.Position
+    local result = Workspace:Raycast(origin, targetPart.Position - origin, rayParams)
+    if not result then return true end
+    return result.Instance:IsDescendantOf(targetPart.Parent)
+end
+
+local function GetClosestPlayer(partName)
+    partName = partName or Config.AimPart
+    local target, shortest = nil, Config.FOVRadius
+    local center = GetFOVCenter()
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local hum = player.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                if Config.TeamCheck and player.Team == LocalPlayer.Team then continue end
+                local part = player.Character:FindFirstChild(partName)
+                if part then
+                    local sp, onScreen = Camera:WorldToViewportPoint(part.Position)
+                    if onScreen then
+                        local dist = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                        if dist < shortest then
+                            if not Config.WallCheck or IsVisible(part) then
+                                shortest = dist
+                                target = part
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return target
+end
+
+-- ============================================
+-- Hitbox
+-- ============================================
+local function ApplyHitbox(player)
+    if player == LocalPlayer or not player.Character then return end
+    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
+        hrp.Transparency = Config.HitboxTransparency
+        hrp.BrickColor = BrickColor.new(Config.HitboxColor)
+        hrp.Material = Enum.Material.Neon
+        hrp.CanCollide = false
+    end
+end
+
+local function ResetHitbox(player)
+    if not player.Character then return end
+    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.Size = Vector3.new(2, 2, 1)
+        hrp.Transparency = 1
+        hrp.Material = Enum.Material.Plastic
+    end
+end
+
+-- ============================================
+-- Silent Aim Hook
+-- ============================================
+local mt = getrawmetatable(game)
+local oldNamecall = mt.__namecall
+setreadonly(mt, false)
+
+mt.__namecall = newcclosure(function(self, ...)
+    if Config.SilentAimEnabled and getnamecallmethod() == "Raycast" and self == Workspace then
+        if math.random(0, 100) <= Config.SilentAimChance then
+            local target = GetClosestPlayer(Config.SilentAimPart)
+            if target then
+                local args = {...}
+                local origin = args[1]
+                local dir = args[2]
+                args[2] = (target.Position - origin).Unit * dir.Magnitude
+                return oldNamecall(self, unpack(args))
+            end
+        end
+    end
+    return oldNamecall(self, ...)
+end)
+
+setreadonly(mt, true)
+
+-- ============================================
+-- Bounding Box
+-- ============================================
+local function GetBox(char)
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil end
+    local sp, on = Camera:WorldToViewportPoint(hrp.Position)
+    if not on then return nil end
+    local ext = char:GetExtentsSize()
+    local dist = (Camera.CFrame.Position - hrp.Position).Magnitude
+    local h = (ext.Y * Camera.ViewportSize.Y) / (2 * dist * math.tan(math.rad(Camera.FieldOfView) / 2))
+    local w = h * (ext.X / ext.Y)
+    return { center = Vector2.new(sp.X, sp.Y), h = h, w = w, bottomY = sp.Y + h / 2 }
+end
+
+-- ============================================
+-- ESP Cache
+-- ============================================
+local function EnsureESP(player)
+    if ESPCache[player] then return ESPCache[player] end
+    local bones = {}
+    for i = 1, 17 do
+        bones[i] = Drawing.new("Line")
+        bones[i].Thickness = 1
+        bones[i].Visible = false
+    end
+    ESPCache[player] = {
+        Name = Drawing.new("Text"),
+        Distance = Drawing.new("Text"),
+        HealthBarBg = Drawing.new("Line"),
+        HealthBar = Drawing.new("Line"),
+        Bones = bones,
+    }
+    return ESPCache[player]
+end
+
+local function HideAllESP()
+    for _, cache in pairs(ESPCache) do
+        cache.Name.Visible = false
+        cache.Distance.Visible = false
+        cache.HealthBar.Visible = false
+        cache.HealthBarBg.Visible = false
+        for _, b in ipairs(cache.Bones) do b.Visible = false end
+    end
+end
+
+-- ============================================
+-- Bones
+-- ============================================
+local function GetBonePoints(char)
+    local function p(name)
+        local part = char:FindFirstChild(name)
+        if part then
+            local sp, on = Camera:WorldToViewportPoint(part.Position)
+            if on then return Vector2.new(sp.X, sp.Y) end
+        end
+        return nil
+    end
+    return {
+        Head = p("Head"),
+        UpperTorso = p("UpperTorso") or p("Torso"),
+        LowerTorso = p("LowerTorso"),
+        LeftUpperArm = p("LeftUpperArm") or p("Left Arm"),
+        LeftLowerArm = p("LeftLowerArm"),
+        LeftHand = p("LeftHand"),
+        RightUpperArm = p("RightUpperArm") or p("Right Arm"),
+        RightLowerArm = p("RightLowerArm"),
+        RightHand = p("RightHand"),
+        LeftUpperLeg = p("LeftUpperLeg") or p("Left Leg"),
+        LeftLowerLeg = p("LeftLowerLeg"),
+        LeftFoot = p("LeftFoot"),
+        RightUpperLeg = p("RightUpperLeg") or p("Right Leg"),
+        RightLowerLeg = p("RightLowerLeg"),
+        RightFoot = p("RightFoot"),
+    }
+end
+
+local function DrawBones(cache, pts, color)
+    local bones = cache.Bones
+    local i = 0
+    local function line(a, b)
+        i = i + 1
+        if a and b and bones[i] then
+            bones[i].From = a
+            bones[i].To = b
+            bones[i].Color = color
+            bones[i].Visible = true
+        end
+    end
+    line(pts.Head, pts.UpperTorso)
+    if pts.LowerTorso then line(pts.UpperTorso, pts.LowerTorso) end
+    line(pts.UpperTorso, pts.LeftUpperArm)
+    line(pts.LeftUpperArm, pts.LeftLowerArm)
+    line(pts.LeftLowerArm, pts.LeftHand)
+    line(pts.UpperTorso, pts.RightUpperArm)
+    line(pts.RightUpperArm, pts.RightLowerArm)
+    line(pts.RightLowerArm, pts.RightHand)
+    local lowerBody = pts.LowerTorso or pts.UpperTorso
+    line(lowerBody, pts.LeftUpperLeg)
+    line(pts.LeftUpperLeg, pts.LeftLowerLeg)
+    line(pts.LeftLowerLeg, pts.LeftFoot)
+    line(lowerBody, pts.RightUpperLeg)
+    line(pts.RightUpperLeg, pts.RightLowerLeg)
+    line(pts.RightLowerLeg, pts.RightFoot)
+end
+
+-- ============================================
+-- Update ESP
+-- ============================================
+local function UpdateESP()
+    HideAllESP()
+    if not Config.ESPEnabled then return end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer and not Config.ESPLocalPlayer then continue end
+        local char = player.Character
+        if not char then continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+
+        local cache = EnsureESP(player)
+        local box = GetBox(char)
+        if not box then continue end
+
+        local color = (Config.ESPTeam and player.TeamColor and player.TeamColor.Color) or Color3.fromRGB(255, 255, 255)
+
+        if Config.ESPName then
+            local head = char:FindFirstChild("Head")
+            if head then
+                local hp, on = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.5, 0))
+                if on then
+                    cache.Name.Text = player.Name
+                    cache.Name.Size = 14
+                    cache.Name.Center = true
+                    cache.Name.Outline = true
+                    cache.Name.Color = color
+                    cache.Name.Position = Vector2.new(hp.X, hp.Y - 10)
+                    cache.Name.Visible = true
+                end
+            end
+        end
+
+        local bottomY = box.bottomY
+        if Config.ESPDistance then
+            local dist = (Camera.CFrame.Position - char.HumanoidRootPart.Position).Magnitude
+            cache.Distance.Text = math.floor(dist) .. " studs"
+            cache.Distance.Size = 12
+            cache.Distance.Center = true
+            cache.Distance.Outline = true
+            cache.Distance.Color = color
+            cache.Distance.Position = Vector2.new(box.center.X, bottomY + 5)
+            cache.Distance.Visible = true
+            bottomY = bottomY + 20
+        end
+
+        if Config.ESPHealth then
+            local pct = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+            local barW = box.w
+            local barH = 6
+            local barX = box.center.X - barW / 2
+            local barY = bottomY + 8
+
+            cache.HealthBarBg.From = Vector2.new(barX, barY)
+            cache.HealthBarBg.To   = Vector2.new(barX + barW, barY)
+            cache.HealthBarBg.Color = Color3.fromRGB(0, 0, 0)
+            cache.HealthBarBg.Thickness = barH
+            cache.HealthBarBg.Transparency = 1
+            cache.HealthBarBg.Visible = true
+
+            local r, g
+            if pct > 0.5 then
+                r = 255 * (1 - (pct - 0.5) * 2)
+                g = 255
+            else
+                r = 255
+                g = 255 * (pct * 2)
+            end
+
+            cache.HealthBar.From = Vector2.new(barX, barY)
+            cache.HealthBar.To   = Vector2.new(barX + barW * pct, barY)
+            cache.HealthBar.Color = Color3.fromRGB(r, g, 0)
+            cache.HealthBar.Thickness = barH - 2
+            cache.HealthBar.Transparency = 1
+            cache.HealthBar.Visible = true
+        end
+
+        if Config.ESPBones then
+            local pts = GetBonePoints(char)
+            DrawBones(cache, pts, color)
+        end
+    end
+end
+
+-- ============================================
+-- SnapLines
+-- ============================================
+local function UpdateSnapLines()
+    for _, line in pairs(SnapLineCache) do line.Visible = false end
+    if not Config.SnapLines then return end
+
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myTool = myChar:FindFirstChildOfClass("Tool")
+    if not myTool then return end
+    local myHandle = myTool:FindFirstChild("Handle")
+    if not myHandle then return end
+
+    local myPos, myOn = Camera:WorldToViewportPoint(myHandle.Position)
+    if not myOn then return end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer or not player.Character then continue end
+        local head = player.Character:FindFirstChild("Head")
+        if not head then continue end
+        local hp, on = Camera:WorldToViewportPoint(head.Position)
+        if not on then continue end
+
+        if not SnapLineCache[player] then
+            SnapLineCache[player] = Drawing.new("Line")
+        end
+        local line = SnapLineCache[player]
+        line.From = Vector2.new(myPos.X, myPos.Y)
+        line.To = Vector2.new(hp.X, hp.Y)
+        line.Color = (Config.ESPTeam and player.TeamColor and player.TeamColor.Color) or Color3.fromRGB(255, 255, 255)
+        line.Thickness = 1
+        line.Visible = true
+    end
+end
+
+-- ============================================
+-- Dropped Tools
+-- ============================================
+local DroppedToolsFolder = Workspace:WaitForChild("DroppedTools", 10)
+
+local function UpdateDroppedTools()
+    for _, d in pairs(DroppedToolCache) do d.Visible = false end
+    if not Config.ESPDroppedTools or not DroppedToolsFolder then return end
+
+    for _, obj in ipairs(DroppedToolsFolder:GetChildren()) do
+        local handle = obj:FindFirstChild("Handle")
+            or (obj:IsA("Model") and obj.PrimaryPart)
+        if handle then
+            local sp, onScreen = Camera:WorldToViewportPoint(handle.Position)
+            if onScreen then
+                if not DroppedToolCache[obj] then
+                    DroppedToolCache[obj] = Drawing.new("Text")
+                end
+                local d = DroppedToolCache[obj]
+                d.Text = obj.Name
+                d.Size = 18
+                d.Center = true
+                d.Outline = true
+                d.Color = Color3.fromRGB(255, 200, 0)
+                d.Position = Vector2.new(sp.X, sp.Y)
+                d.Visible = true
+            end
+        end
+    end
+end
+
+-- ============================================
+-- Aimbot press
+-- ============================================
+local aimKeyMap = {
+    MouseButton1 = Enum.UserInputType.MouseButton1,
+    MouseButton2 = Enum.UserInputType.MouseButton2,
+}
+
+local function IsAimPressed()
+    if aimKeyMap[Config.AimKey] then
+        return UserInputService:IsMouseButtonPressed(aimKeyMap[Config.AimKey])
+    end
+    local k = Enum.KeyCode[Config.AimKey]
+    return k and UserInputService:IsKeyDown(k) or false
+end
+
+-- ============================================
+-- Infinite Jump
+-- ============================================
+UserInputService.JumpRequest:Connect(function()
+    if Config.InfiniteJump then
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+-- ============================================
+-- Loops
+-- ============================================
+RunService.RenderStepped:Connect(function()
+    if Config.ShowFOV then
+        FOVCircle.Position = GetFOVCenter()
+    end
+
+    if Config.AimbotEnabled and IsAimPressed() then
+        local target = GetClosestPlayer()
+        if target then
+            Camera.CFrame = Camera.CFrame:Lerp(
+                CFrame.new(Camera.CFrame.Position, target.Position),
+                1 / Config.Smoothness
+            )
+        end
+    end
+
+    UpdateESP()
+    UpdateSnapLines()
+    UpdateDroppedTools()
+end)
+
+RunService.Heartbeat:Connect(function(dt)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if Config.HitboxEnabled then
+            ApplyHitbox(player)
+        else
+            ResetHitbox(player)
+        end
+    end
+
+    local char = LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hum and hrp then
+            if hum.WalkSpeed ~= Config.WalkSpeed then hum.WalkSpeed = Config.WalkSpeed end
+            if hum.UseJumpPower and hum.JumpPower ~= Config.JumpPower then hum.JumpPower = Config.JumpPower end
+
+            if Config.NoClip then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") and part.CanCollide then
+                        part.CanCollide = false
+                    end
+                end
+            end
+
+            if Config.SpinBot then
+                hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(Config.SpinSpeed), 0)
+            end
+
+            if Config.Fly then
+                local moveDir = Vector3.zero
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir += Camera.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir -= Camera.CFrame.LookVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir -= Camera.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir += Camera.CFrame.RightVector end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir += Vector3.new(0, 1, 0) end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir -= Vector3.new(0, 1, 0) end
+                if moveDir.Magnitude > 0 then moveDir = moveDir.Unit * Config.FlySpeed end
+                hrp.Velocity = moveDir
+                hrp.RotVelocity = Vector3.zero
+            end
+        end
+    end
+
+    for obj, drawing in pairs(DroppedToolCache) do
+        if not obj.Parent then
+            drawing:Remove()
+            DroppedToolCache[obj] = nil
+        end
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    if ESPCache[p] then
+        for _, d in pairs(ESPCache[p]) do
+            if typeof(d) == "table" then
+                for _, b in ipairs(d) do b:Remove() end
+            else
+                d:Remove()
+            end
+        end
+        ESPCache[p] = nil
+    end
+    if SnapLineCache[p] then
+        SnapLineCache[p]:Remove()
+        SnapLineCache[p] = nil
+    end
+end)
+
+-- ============================================
+-- Finalização
+-- ============================================
+Window:SelectTab(1)
+Fluent:Notify({
+    Title = "Valley Prison Hub",
+    Content = "Carregado!",
+    Duration = 5
+})
